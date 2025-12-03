@@ -1,0 +1,88 @@
+Table Books {
+  ISBN varchar(20) [primary key]
+  Title varchar(200) [not null]
+  Author varchar(100) [not null]
+  Publisher varchar(100)
+  Year int
+  Genre varchar(50)
+  PurchasePrice decimal(10,2)
+  SalePrice decimal(10,2)
+  Weight int
+  Pages int
+  
+  Note: 'Основная таблица книг'
+}
+
+Table Suppliers {
+  SupplierID int [primary key]
+  Name varchar(100) [not null]
+  ContactPerson varchar(100)
+  Phone varchar(20)
+  Address varchar(200)
+  Rating int
+  
+  Note: 'Поставщики книг'
+}
+
+Table Customers {
+  CustomerID int [primary key]
+  FullName varchar(150) [not null]
+  Phone varchar(20)
+  Address varchar(200)
+  Email varchar(100)
+  Type varchar(20) [note: '"оптовый" или "розничный"']
+  
+  Note: 'Клиенты (покупатели)'
+}
+
+Table Employees {
+  EmployeeID int [primary key]
+  FullName varchar(100) [not null]
+  Position varchar(50)
+  Phone varchar(20)
+  HireDate date
+  
+  Note: 'Сотрудники склада'
+}
+
+Table WarehouseCells {
+  CellID int [primary key]
+  Sector char(2)
+  Row int
+  Shelf int
+  Capacity int
+  
+  Note: 'Складские ячейки для хранения'
+}
+
+Table Orders {
+  OrderID int [primary key]
+  OrderType varchar(10) [note: '"purchase" или "sale"']
+  OrderDate date [not null]
+  DeliveryDate date
+  Status varchar(30)
+  SupplierID int
+  CustomerID int
+  EmployeeID int
+  
+  Note: 'Заказы (на поставку или продажу)'
+}
+
+Table Stock {
+  StockID int [primary key]
+  ISBN varchar(20)
+  CellID int
+  Quantity int [not null]
+  LastUpdated date [default: `CURRENT_DATE`]
+  
+  Note: 'Остатки книг в ячейках'
+}
+
+// СВЯЗИ (Foreign Keys)
+
+Ref: Orders.SupplierID > Suppliers.SupplierID
+Ref: Orders.CustomerID > Customers.CustomerID
+Ref: Orders.EmployeeID > Employees.EmployeeID
+
+Ref: Stock.ISBN > Books.ISBN
+Ref: Stock.CellID > WarehouseCells.CellID
