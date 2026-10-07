@@ -1,0 +1,471 @@
+from pathlib import Path
+import runpy
+import sys
+
+# Один файл создаёт отдельные модули и запускает общее меню.
+FILES = {
+    "contacts_data.py": '''
+from dataclasses import dataclass
+
+@dataclass
+class Contact:
+    name: str
+    phone: str
+    email: str
+''',
+
+    "contacts_operations.py": '''
+from contacts_data import Contact
+
+def find_contact(contacts, name):
+    for contact in contacts:
+        if contact.name.casefold() == name.strip().casefold():
+            return contact
+    return None
+
+def add_contact(contacts, name, phone, email):
+    name = name.strip()
+    phone = phone.strip()
+    email = email.strip()
+
+    if not all((name, phone, email)):
+        raise ValueError("Все поля должны быть заполнены.")
+
+    if find_contact(contacts, name):
+        raise ValueError("Контакт с таким именем уже существует.")
+
+    contacts.append(Contact(name, phone, email))
+
+def delete_contact(contacts, name):
+    contact = find_contact(contacts, name)
+
+    if contact is None:
+        return False
+
+    contacts.remove(contact)
+    return True
+''',
+
+    "contacts_files.py": '''
+import json
+from pathlib import Path
+from dataclasses import asdict
+from contacts_operations import add_contact
+
+DEFAULT_FILE = Path(__file__).with_name("contacts.json")
+
+def save_contacts(contacts, filename=DEFAULT_FILE):
+    path = Path(filename)
+    temporary = path.with_suffix(path.suffix + ".tmp")
+
+    data = [asdict(contact) for contact in contacts]
+
+    temporary.write_text(
+        json.dumps(data, ensure_ascii=False, indent=4),
+        encoding="utf-8"
+    )
+    temporary.replace(path)
+
+def load_contacts(filename=DEFAULT_FILE):
+    data = json.loads(Path(filename).read_text(encoding="utf-8"))
+
+    if not isinstance(data, list):
+        raise ValueError("В файле должен быть список контактов.")
+
+    contacts = []
+
+    for item in data:
+        if not isinstance(item, dict):
+            raise ValueError("Неверная структура контакта.")
+
+        if set(item) != {"name", "phone", "email"}:
+            raise ValueError("Неверные поля контакта.")
+
+        if not all(isinstance(value, str) for value in item.values()):
+            raise ValueError("Поля контакта должны быть строками.")
+
+        add_contact(
+            contacts,
+            item["name"],
+            item["phone"],
+            item["email"]
+        )
+
+    return contacts
+''',
+
+    "contacts_io.py": r'''
+from contacts_operations import add_contact, delete_contact, find_contact
+from contacts_files import save_contacts, load_contacts, DEFAULT_FILE
+
+def show_contact(contact):
+    print(
+        f"Имя: {contact.name} | "
+        f"Телефон: {contact.phone} | "
+        f"Email: {contact.email}"
+    )
+
+def run_notebook():
+    contacts = []
+
+    if DEFAULT_FILE.exists():
+        try:
+            contacts = load_contacts()
+        except (OSError, ValueError) as error:
+            print("Не удалось загрузить контакты:", error)
+
+    while True:
+        print("\nЗАПИСНАЯ КНИЖКА")
+        print("1. Добавить контакт")
+        print("2. Удалить контакт")
+        print("3. Найти контакт")
+        print("4. Показать все контакты")
+        print("5. Сохранить в файл")
+        print("6. Загрузить из файла")
+        print("0. Назад")
+
+        choice = input("Выберите пункт: ").strip()
+
+        try:
+            if choice == "1":
+                name = input("Имя: ")
+                phone = input("Телефон: ")
+                email = input("Email: ")
+
+                add_contact(contacts, name, phone, email)
+                print("Контакт добавлен.")
+
+            elif choice == "2":
+                name = input("Имя для удаления: ")
+
+                if delete_contact(contacts, name):
+                    print("Контакт удалён.")
+                else:
+                    print("Контакт не найден.")
+
+            elif choice == "3":
+                name = input("Имя для поиска: ")
+                contact = find_contact(contacts, name)
+
+                if contact:
+                    show_contact(contact)
+                else:
+                    print("Контакт не найден.")
+
+            elif choice == "4":
+                if not contacts:
+                    print("Записная книжка пуста.")
+
+                for contact in contacts:
+                    show_contact(contact)
+
+            elif choice == "5":
+                save_contacts(contacts)
+                print("Контакты сохранены.")
+
+            elif choice == "6":
+                contacts = load_contacts()
+                print("Контакты загружены.")
+
+            elif choice == "0":
+                return
+
+            else:
+                print("Нет такого пункта.")
+
+        except (OSError, ValueError) as error:
+            print("Ошибка:", error)
+''',
+
+    "mystring.py": '''
+def count_words(text):
+    return len(text.split())
+
+def reverse_string(text):
+    return text[::-1]
+
+def find_substring(text, substring):
+    # Индекс первого совпадения или -1, если подстрока не найдена.
+    return text.find(substring)
+
+def replace_substring(text, old, new):
+    return text.replace(old, new)
+
+def to_upper(text):
+    return text.upper()
+
+def to_lower(text):
+    return text.lower()
+''',
+
+    "text_analyzer.py": '''
+import mystring
+
+def run_analyzer():
+    text = input("Введите текст: ")
+
+    print("Количество слов:", mystring.count_words(text))
+    print("Перевёрнутая строка:", mystring.reverse_string(text))
+
+    substring = input("Введите подстроку для поиска: ")
+    index = mystring.find_substring(text, substring)
+
+    if index == -1:
+        print("Подстрока не найдена.")
+    else:
+        print("Индекс первого совпадения:", index)
+        print("Отсчёт индексов начинается с 0.")
+
+if __name__ == "__main__":
+    run_analyzer()
+''',
+
+    "string_editor.py": r'''
+import mystring
+
+def run_editor():
+    text = input("Введите строку: ")
+
+    while True:
+        print("\nТекущая строка:", text)
+        print("1. Заменить подстроку")
+        print("2. Привести к верхнему регистру")
+        print("3. Привести к нижнему регистру")
+        print("4. Перевернуть строку")
+        print("0. Назад")
+
+        choice = input("Выберите пункт: ").strip()
+
+        if choice == "1":
+            old = input("Что заменить: ")
+
+            if not old:
+                print("Подстрока не должна быть пустой.")
+                continue
+
+            new = input("На что заменить: ")
+            text = mystring.replace_substring(text, old, new)
+
+        elif choice == "2":
+            text = mystring.to_upper(text)
+
+        elif choice == "3":
+            text = mystring.to_lower(text)
+
+        elif choice == "4":
+            text = mystring.reverse_string(text)
+
+        elif choice == "0":
+            return
+
+        else:
+            print("Нет такого пункта.")
+
+if __name__ == "__main__":
+    run_editor()
+''',
+
+    "game_board.py": '''
+def create_board():
+    return [" "] * 9
+
+def show_board(board):
+    cells = []
+
+    for index, value in enumerate(board):
+        if value == " ":
+            cells.append(str(index + 1))
+        else:
+            cells.append(value)
+
+    for row in range(3):
+        print(" | ".join(cells[row * 3:row * 3 + 3]))
+
+        if row < 2:
+            print("---------")
+
+def check_winner(board):
+    winning_lines = [
+        (0, 1, 2),
+        (3, 4, 5),
+        (6, 7, 8),
+        (0, 3, 6),
+        (1, 4, 7),
+        (2, 5, 8),
+        (0, 4, 8),
+        (2, 4, 6)
+    ]
+
+    for a, b, c in winning_lines:
+        if board[a] != " " and board[a] == board[b] == board[c]:
+            return board[a]
+
+    return None
+
+def is_draw(board):
+    return " " not in board and check_winner(board) is None
+''',
+
+    "game_players.py": '''
+def is_valid_move(board, position):
+    return 0 <= position < 9 and board[position] == " "
+
+def player_move(board, symbol):
+    while True:
+        value = input(f"Игрок {symbol}, выберите клетку (1–9): ")
+
+        try:
+            position = int(value) - 1
+        except ValueError:
+            print("Введите число от 1 до 9.")
+            continue
+
+        if not is_valid_move(board, position):
+            print("Клетка занята или номер неверный.")
+            continue
+
+        board[position] = symbol
+        return
+''',
+
+    "game_logic.py": r'''
+from game_board import create_board, show_board, check_winner, is_draw
+from game_players import player_move
+
+def run_game():
+    board = create_board()
+    symbol = "X"
+
+    print("\nКРЕСТИКИ-НОЛИКИ")
+    print("Играют два человека. Первым ходит X.")
+
+    while True:
+        show_board(board)
+        player_move(board, symbol)
+
+        winner = check_winner(board)
+
+        if winner:
+            show_board(board)
+            print(f"Победил игрок {winner}!")
+            return
+
+        if is_draw(board):
+            show_board(board)
+            print("Ничья!")
+            return
+
+        symbol = "O" if symbol == "X" else "X"
+''',
+
+    "main.py": r'''
+from contacts_io import run_notebook
+from text_analyzer import run_analyzer
+from string_editor import run_editor
+from game_logic import run_game
+
+def main():
+    while True:
+        print("\nОБЩЕЕ МЕНЮ")
+        print("1. Записная книжка — задача 1")
+        print("2. Анализатор текста — задача 2")
+        print("3. Редактор строк — задача 2")
+        print("4. Крестики-нолики — задача 3")
+        print("0. Выход")
+
+        choice = input("Выберите пункт: ").strip()
+
+        if choice == "1":
+            run_notebook()
+        elif choice == "2":
+            run_analyzer()
+        elif choice == "3":
+            run_editor()
+        elif choice == "4":
+            run_game()
+        elif choice == "0":
+            return
+        else:
+            print("Нет такого пункта.")
+
+if __name__ == "__main__":
+    try:
+        main()
+    except (EOFError, KeyboardInterrupt):
+        print("\nПрограмма завершена.")
+''',
+
+    "interfaces.txt": '''
+Интерфейсы модулей
+
+Задача 1:
+contacts_data:
+    Contact(name, phone, email) — структура контакта.
+contacts_operations:
+    add_contact(contacts, name, phone, email) — добавление.
+    delete_contact(contacts, name) — удаление, возвращает True или False.
+    find_contact(contacts, name) — поиск, возвращает контакт или None.
+contacts_files:
+    save_contacts(contacts, filename) — сохранение в JSON.
+    load_contacts(filename) — загрузка списка контактов.
+contacts_io:
+    show_contact(contact) — вывод контакта.
+    run_notebook() — меню записной книжки.
+
+Задача 2:
+mystring:
+    count_words(text) — количество слов.
+    reverse_string(text) — переворот строки.
+    find_substring(text, substring) — индекс совпадения или -1.
+    replace_substring(text, old, new) — замена всех совпадений.
+    to_upper(text) — верхний регистр.
+    to_lower(text) — нижний регистр.
+text_analyzer:
+    run_analyzer() — программа анализа текста.
+string_editor:
+    run_editor() — программа редактирования строки.
+
+Обе программы импортируют mystring и запускаются отдельно:
+    python text_analyzer.py
+    python string_editor.py
+
+Задача 3:
+game_board:
+    create_board() — создание поля.
+    show_board(board) — вывод поля.
+    check_winner(board) — символ победителя или None.
+    is_draw(board) — проверка ничьей.
+game_players:
+    is_valid_move(board, position) — проверка хода.
+    player_move(board, symbol) — ввод и выполнение хода.
+game_logic:
+    run_game() — игровой цикл и смена игроков.
+main:
+    main() — главное меню и запуск программ.
+
+Перед выходом из записной книжки сохраните изменения пунктом 5.
+'''
+}
+
+
+def prepare_modules():
+    folder = Path(__file__).resolve().parent / "python_tasks"
+    folder.mkdir(exist_ok=True)
+
+    for name, source in FILES.items():
+        path = folder / name
+
+        # Существующие файлы сохраняются, чтобы не стереть правки.
+        if not path.exists():
+            path.write_text(source.lstrip(), encoding="utf-8")
+
+    return folder
+
+
+if __name__ == "__main__":
+    try:
+        folder = prepare_modules()
+        sys.path.insert(0, str(folder))
+        runpy.run_path(str(folder / "main.py"), run_name="__main__")
+    except (OSError, EOFError, KeyboardInterrupt) as error:
+        print("Программа завершена:", error)
