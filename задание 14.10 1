@@ -1,0 +1,26 @@
+# Файл geometry.py
+
+import math
+
+def circle_area(radius):
+    if radius < 0:
+        raise ValueError("Радиус не может быть отрицательным.")
+    return math.pi * radius ** 2
+
+def circumference(radius):
+    if radius < 0:
+        raise ValueError("Радиус не может быть отрицательным.")
+    return 2 * math.pi * radius
+
+def triangle_area(a, b, c):
+    if min(a, b, c) <= 0:
+        raise ValueError("Стороны должны быть положительными.")
+    if a + b <= c or a + c <= b or b + c <= a:
+        raise ValueError("Такого треугольника не существует.")
+    p = (a + b + c) / 2
+    return math.sqrt(p * (p - a) * (p - b) * (p - c))
+
+def sphere_volume(radius):
+    if radius < 0:
+        raise ValueError("Радиус не может быть отрицательным.")
+    return 4 * math.pi * radius ** 3 / 3
